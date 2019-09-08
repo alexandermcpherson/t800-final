@@ -1,3 +1,5 @@
+#include <DFRobotDFPlayerMini.h>
+
 #include "Arduino.h"
 #include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
@@ -92,12 +94,18 @@ const int termniator1SfxVisionRuntime = 84000; // 1:min 40secs
 // Push buttons
 const int t1Quotes = 2;
 const int t2Quotes = 4;
+const int fadeInOut = 7; // 5&6 PWM
+const int spareButton = 8;
 
 // LEDs
-const int leftEye = 13; // LEFT LED EYE
-const int rightEye = 12; // RIGHT LED EYE
+const int leftEye = 5; // LEFT LED EYE 9
+const int rightEye = 6; // RIGHT LED EYE 11
+
 
 boolean trackHasFinsishedPlaying = false;
+boolean hasFadedOut = false;
+int brightness = 0;
+int fadeAmount = 5;
 
 void setup()
 {
@@ -109,7 +117,10 @@ void setup()
   digitalWrite(t2Quotes,HIGH);
 
   pinMode(leftEye, OUTPUT);
-  pinMode(rightEye, OUTPUT); 
+  pinMode(rightEye, OUTPUT);
+
+  pinMode(fadeInOut, INPUT);
+  digitalWrite(fadeInOut, HIGH);
   
   mySoftwareSerial.begin(9600);
   Serial.begin(115200);
@@ -139,7 +150,9 @@ void runBlink() {
   blinkWithDelay(30, 14);
   delay(500);
   blinkWithDelay(50, 4);
-  delay(600);
+  delay(200);
+  blinkWithDelay(10, 2);
+  delay(275);
   blinkWithDelay(150, 5);
   stopBlink();
 }
@@ -175,7 +188,7 @@ void getTrackStatus() {
 }
 
 void setEqualizer() {
-  myDFPlayer.EQ(DFPLAYER_EQ_NORMAL);
+  myDFPlayer.EQ(DFPLAYER_EQ_BASS);
 }
 
 void setVolume(int volume) {
@@ -194,8 +207,39 @@ String printFilePath(int folder, int file) {
   return fullPath;
 }
 
+void doFadeOut() {
+  playMp3(terminator2SpeechFolder, terminator2SpeechHastaLaVistaBaby);
+  getTrackStatus();
+  if (trackHasFinsishedPlaying == true) {
+    Serial.println(F("Doing fadeOut:"));
+    for (int fadeValue = 255; fadeValue >= 0; fadeValue -= 5) {
+      // sets the value (range from 255 to 0):
+      analogWrite(leftEye, fadeValue);
+      analogWrite(rightEye, fadeValue);
+      // wait for 30 milliseconds to see the dimming effect
+      delay(30);
+      hasFadedOut = true;
+    }
+  }
+}
+
+void doFadeIn() {
+  Serial.println(F("Doing fadeIn:"));
+  for (int fadeValue = 0 ; fadeValue <= 255; fadeValue += 5) {
+    // sets the value (range from 0 to 255):
+    analogWrite(leftEye, fadeValue);
+    analogWrite(rightEye, fadeValue);
+    // wait for 30 milliseconds to see the dimming effect
+    delay(30);
+    hasFadedOut = false;
+    if (fadeValue == 255) {
+      playMp3(terminator1SpeechFolder, terminator1SpeechSarahConnor);
+    }
+  }
+}
+
 void loop() {
-  
+
   if (myDFPlayer.available()) {
     printDetail(myDFPlayer.readType(), myDFPlayer.read()); // Print the detail message from DFPlayer to handle different errors and states.
   }
@@ -210,6 +254,14 @@ void loop() {
     playMp3(terminator2SpeechFolder, random(1, 11));
     delay(1000);
     Serial.println(F("T2 Quotes button pressed:"));
+  }
+
+  if (digitalRead(fadeInOut) == LOW) {
+    if (hasFadedOut == false) {
+      doFadeOut();
+    } else if (hasFadedOut == true) {
+      doFadeIn();
+    }
   }
 }
 
